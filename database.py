@@ -46,6 +46,7 @@ class DB:
             id SERIAL PRIMARY KEY,
             channel_id INT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
             user_id BIGINT NOT NULL,
+            name TEXT NOT NULL DEFAULT '',
             status TEXT NOT NULL DEFAULT 'active',  -- active/expired/removed
             expires_at TIMESTAMP NOT NULL,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
