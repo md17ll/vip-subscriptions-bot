@@ -1,4 +1,3 @@
-import re
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 )
@@ -6,6 +5,9 @@ from telegram.ext import (
 from config import BOT_TOKEN
 from handlers.start import start
 from handlers.common import is_superadmin
+
+# Help
+from handlers.help import help_menu
 
 # Owner
 from handlers.owner import link_channel, receive_channel
@@ -47,7 +49,7 @@ async def back_main(update, context):
     q = update.callback_query
     await q.answer()
     uid = q.from_user.id
-    await q.message.reply_text("🏠 القائمة الرئيسية", reply_markup=owner_main_menu(is_superadmin(uid)))
+    await q.edit_message_text("🏠 القائمة الرئيسية", reply_markup=owner_main_menu(is_superadmin(uid)))
 
 
 # ===== wrappers to extract IDs from callback_data =====
@@ -89,11 +91,23 @@ async def _owner_note(update, context):
     await owner_action_callback(update, context, "note", oid)
 
 
+# ✅ Router واحد لكل الرسائل النصية (بدل 4 MessageHandlers اللي كانوا يوقفوا بعض)
+async def text_router(update, context):
+    # كل وحدة من هذول بتتأكد من حالتها (flow) إذا ما لها علاقة ترجع فوراً
+    await admin_text_receiver(update, context)
+    await receive_channel(update, context)
+    await members_text(update, context)
+    await receive_welcome_text(update, context)
+
+
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
     # /start
     app.add_handler(CommandHandler("start", start))
+
+    # Help button
+    app.add_handler(CallbackQueryHandler(help_menu, pattern=r"^help$"))
 
     # Global back
     app.add_handler(CallbackQueryHandler(back_main, pattern=r"^back_main$"))
@@ -156,15 +170,12 @@ def main():
     app.add_handler(CallbackQueryHandler(set_welcome_prompt, pattern=r"^set_welcome_msg$"))
     app.add_handler(CallbackQueryHandler(clear_welcome_message, pattern=r"^clear_welcome_msg$"))
 
-    # Text receiver (admin + owner + members + settings)
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, admin_text_receiver))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, receive_channel))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, members_text))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, receive_welcome_text))
+    # ✅ Text router (واحد فقط)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
 
     # Jobs
-    app.job_queue.run_repeating(expire_members_job, interval=60, first=10)  # كل دقيقة
-    app.job_queue.run_repeating(owner_guard_job, interval=300, first=20)    # كل 5 دقائق
+    app.job_queue.run_repeating(expire_members_job, interval=60, first=10)   # كل دقيقة
+    app.job_queue.run_repeating(owner_guard_job, interval=300, first=20)     # كل 5 دقائق
 
     app.run_polling()
 
