@@ -21,7 +21,7 @@ async def link_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✅ الخطوات:\n"
         "1) أضف البوت كـ Admin داخل القناة/المجموعة\n"
         "2) اكتب أي رسالة داخل القناة (مثلاً: test)\n"
-        "3) اعمل **Forward** لهذه الرسالة للبوت هنا بالخاص\n\n"
+        "3) اعمل Forward لهذه الرسالة للبوت هنا بالخاص\n\n"
         "📌 ملاحظة: لازم يكون الـ Forward ظاهر (مو مخفي) حتى يقرأ البوت معلومات القناة."
     )
 
@@ -44,7 +44,6 @@ async def receive_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = int(fchat.id)
     title = fchat.title or ""
 
-    # حفظ القناة (مع دعم الهيكل الجديد لقاعدة البيانات)
     db.execute(
         """
         INSERT INTO channels(owner_id, chat_id, title)
@@ -66,6 +65,5 @@ async def receive_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "✅ تم ربط القناة بنجاح!\n\n"
         f"📌 الاسم: {title or 'بدون اسم'}\n"
-        f"🆔 chat_id: `{chat_id}`",
-        parse_mode="Markdown"
+        f"🆔 chat_id: {chat_id}"
     )
