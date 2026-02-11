@@ -55,7 +55,7 @@ class DB:
         );
         """)
 
-        # ✅ جديد (بدون تخريب): إذا كان الجدول قديم وما فيه name نضيفه
+        # ✅ مهم: إذا الجدول كان موجود من قبل، هذا السطر بيضيف العمود بدون ما يخرب شي
         cur.execute("""
         ALTER TABLE subscribers
         ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '';
