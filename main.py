@@ -15,6 +15,7 @@ from handlers.owner import link_channel, receive_channel
 # Members
 from handlers.members import (
     members_menu, add_member_start, search_member_start, remove_member_start,
+    expiring_menu, list_members, channel_stats,  # ✅ جديد
     handle_text as members_text,
     pick_channel_for_add, pick_channel_for_search, pick_channel_for_remove,
     add_duration_pick, add_confirm,
@@ -91,9 +92,8 @@ async def _owner_note(update, context):
     await owner_action_callback(update, context, "note", oid)
 
 
-# ✅ Router واحد لكل الرسائل النصية (بدل 4 MessageHandlers اللي كانوا يوقفوا بعض)
+# ✅ Router واحد لكل الرسائل (مهم للـ Forward لو كان ميديا)
 async def text_router(update, context):
-    # كل وحدة من هذول بتتأكد من حالتها (flow) إذا ما لها علاقة ترجع فوراً
     await admin_text_receiver(update, context)
     await receive_channel(update, context)
     await members_text(update, context)
@@ -111,6 +111,11 @@ def main():
 
     # Global back
     app.add_handler(CallbackQueryHandler(back_main, pattern=r"^back_main$"))
+
+    # ✅ MAIN MENU buttons (الجدد)
+    app.add_handler(CallbackQueryHandler(expiring_menu, pattern=r"^expiring_menu$"))
+    app.add_handler(CallbackQueryHandler(list_members, pattern=r"^list_members$"))
+    app.add_handler(CallbackQueryHandler(channel_stats, pattern=r"^channel_stats$"))
 
     # Admin entry
     app.add_handler(CallbackQueryHandler(admin_panel, pattern=r"^admin_panel$"))
@@ -154,7 +159,9 @@ def main():
     app.add_handler(CallbackQueryHandler(lambda u, c: extend_selected(u, c, 30), pattern=r"^extend_30$"))
     app.add_handler(CallbackQueryHandler(reactivate_selected, pattern=r"^reactivate$"))
     app.add_handler(CallbackQueryHandler(invite_link_selected, pattern=r"^invite_link$"))
-    app.add_handler(CallbackQueryHandler(remove_selected, pattern=r"^remove_member$"))
+
+    # ✅ حذف المحدد (بعد إصلاح التعارض في ui.py)
+    app.add_handler(CallbackQueryHandler(remove_selected, pattern=r"^remove_selected$"))
 
     # Settings
     app.add_handler(CallbackQueryHandler(open_settings, pattern=r"^channel_settings$"))
@@ -170,8 +177,8 @@ def main():
     app.add_handler(CallbackQueryHandler(set_welcome_prompt, pattern=r"^set_welcome_msg$"))
     app.add_handler(CallbackQueryHandler(clear_welcome_message, pattern=r"^clear_welcome_msg$"))
 
-    # ✅ Text router (واحد فقط)
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
+    # ✅ Text router (ALL حتى forward ميديا)
+    app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, text_router))
 
     # Jobs
     app.job_queue.run_repeating(expire_members_job, interval=60, first=10)   # كل دقيقة
