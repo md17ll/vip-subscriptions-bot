@@ -9,16 +9,20 @@ async def link_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     user_id = query.from_user.id
-
     allowed, msg = require_owner_active(user_id)
     if not allowed:
-        await query.message.reply_text(msg)
+        await query.edit_message_text(msg)
         return
 
     context.user_data["link_channel"] = True
 
-    await query.message.reply_text(
-        "أرسل chat_id للقناة بعد جعل البوت Admin"
+    await query.edit_message_text(
+        "🔗 ربط قناة / مجموعة\n\n"
+        "✅ الخطوات:\n"
+        "1) أضف البوت كـ Admin داخل القناة/المجموعة\n"
+        "2) اكتب أي رسالة داخل القناة (مثلاً: test)\n"
+        "3) اعمل **Forward** لهذه الرسالة للبوت هنا بالخاص\n\n"
+        "📌 ملاحظة: لازم يكون الـ Forward ظاهر (مو مخفي) حتى يقرأ البوت معلومات القناة."
     )
 
 
@@ -27,13 +31,41 @@ async def receive_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     user_id = update.effective_user.id
-    chat_id = update.message.text
 
+    # لازم تكون رسالة Forward من قناة/مجموعة
+    fchat = update.message.forward_from_chat
+    if not fchat:
+        await update.message.reply_text(
+            "⚠️ لازم تعمل Forward لرسالة من القناة/المجموعة.\n"
+            "ارجع واعمل Forward لرسالة من القناة بعد إضافة البوت Admin."
+        )
+        return
+
+    chat_id = int(fchat.id)
+    title = fchat.title or ""
+
+    # حفظ القناة (مع دعم الهيكل الجديد لقاعدة البيانات)
     db.execute(
-        "INSERT INTO channels(owner_id,chat_id) VALUES(%s,%s) ON CONFLICT DO NOTHING",
-        (user_id, chat_id)
+        """
+        INSERT INTO channels(owner_id, chat_id, title)
+        VALUES(%s, %s, %s)
+        ON CONFLICT(owner_id, chat_id) DO UPDATE SET
+            title = EXCLUDED.title,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (user_id, chat_id, title)
     )
 
-    await update.message.reply_text("✅ تم ربط القناة بنجاح")
+    db.execute(
+        "INSERT INTO logs(owner_id, action, details) VALUES(%s,%s,%s)",
+        (user_id, "channel_linked", f"{chat_id}")
+    )
 
     context.user_data.clear()
+
+    await update.message.reply_text(
+        "✅ تم ربط القناة بنجاح!\n\n"
+        f"📌 الاسم: {title or 'بدون اسم'}\n"
+        f"🆔 chat_id: `{chat_id}`",
+        parse_mode="Markdown"
+    )
