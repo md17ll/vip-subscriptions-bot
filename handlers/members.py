@@ -38,7 +38,7 @@ def _get_selected(context: ContextTypes.DEFAULT_TYPE):
 
 # ✅ جديد: نمسح فقط بيانات التدفق بدون لمس selected
 def _clear_flow(context: ContextTypes.DEFAULT_TYPE):
-    for k in ("flow", "step", "channel_id", "user_id", "days", "full_name"):
+    for k in ("flow", "step", "channel_id", "user_id", "days", "name"):
         context.user_data.pop(k, None)
 
 def _parse_user_id_from_update(update: Update):
@@ -110,7 +110,7 @@ async def expiring_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     rows = db.fetch("""
-        SELECT s.user_id, s.full_name, s.expires_at, c.title, c.chat_id
+        SELECT s.user_id, s.name, s.expires_at, c.title, c.chat_id
         FROM subscribers s
         JOIN channels c ON c.id = s.channel_id
         WHERE c.owner_id=%s
@@ -128,7 +128,7 @@ async def expiring_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             title = r["title"] or str(r["chat_id"])
             exp = r["expires_at"]
             exp_txt = exp.strftime("%Y-%m-%d %H:%M") if hasattr(exp, "strftime") else str(exp)
-            name = (r.get("full_name") or "").strip()
+            name = (r.get("name") or "").strip()
             name_txt = f"👤 الاسم: {name}\n" if name else ""
             text += f"📌 {title}\n{name_txt}🆔 {r['user_id']}\n📅 ينتهي: {exp_txt}\n\n"
 
@@ -155,7 +155,7 @@ async def list_members(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     rows = db.fetch("""
-        SELECT s.user_id, s.full_name, s.expires_at, s.status, c.title, c.chat_id
+        SELECT s.user_id, s.name, s.expires_at, s.status, c.title, c.chat_id
         FROM subscribers s
         JOIN channels c ON c.id = s.channel_id
         WHERE c.owner_id=%s
@@ -171,7 +171,7 @@ async def list_members(update: Update, context: ContextTypes.DEFAULT_TYPE):
             title = r["title"] or str(r["chat_id"])
             exp = r["expires_at"]
             exp_txt = exp.strftime("%Y-%m-%d %H:%M") if hasattr(exp, "strftime") else str(exp)
-            name = (r.get("full_name") or "").strip()
+            name = (r.get("name") or "").strip()
             name_txt = f"👤 الاسم: {name}\n" if name else ""
             text += f"📌 {title}\n{name_txt}🆔 {r['user_id']}\n📊 {r['status']}\n📅 {exp_txt}\n\n"
 
@@ -295,10 +295,10 @@ async def add_duration_pick(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     ch_id = context.user_data["channel_id"]
     user_id = context.user_data["user_id"]
-    full_name = (context.user_data.get("full_name") or "").strip()
+    name = (context.user_data.get("name") or "").strip()
     expires_at = datetime.utcnow() + timedelta(days=days)
 
-    name_line = f"👤 الاسم: {full_name}\n" if full_name else ""
+    name_line = f"👤 الاسم: {name}\n" if name else ""
 
     await q.edit_message_text(
         "✅ تأكيد إضافة مشترك\n\n"
@@ -326,7 +326,7 @@ async def add_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     channel_id = int(context.user_data.get("channel_id"))
     user_id = int(context.user_data.get("user_id"))
     days = int(context.user_data.get("days"))
-    full_name = (context.user_data.get("full_name") or "").strip()
+    name = (context.user_data.get("name") or "").strip()
 
     ch = _channel_by_id(owner_id, channel_id)
     if not ch:
@@ -338,12 +338,12 @@ async def add_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     db.execute(
         """
-        INSERT INTO subscribers(channel_id, user_id, full_name, status, expires_at, created_at, updated_at)
+        INSERT INTO subscribers(channel_id, user_id, name, status, expires_at, created_at, updated_at)
         VALUES (%s,%s,%s,'active',%s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         ON CONFLICT(channel_id, user_id)
-        DO UPDATE SET full_name=EXCLUDED.full_name, status='active', expires_at=EXCLUDED.expires_at, updated_at=CURRENT_TIMESTAMP
+        DO UPDATE SET name=EXCLUDED.name, status='active', expires_at=EXCLUDED.expires_at, updated_at=CURRENT_TIMESTAMP
         """,
-        (channel_id, user_id, full_name, expires_at)
+        (channel_id, user_id, name, expires_at)
     )
 
     db.execute(
@@ -476,7 +476,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if len(name) < 2:
             await update.message.reply_text("⚠️ اكتب اسم صحيح (حرفين أو أكثر).")
             return
-        context.user_data["full_name"] = name
+        context.user_data["name"] = name
         context.user_data["step"] = "wait_user"
         await update.message.reply_text("🆔 الآن أرسل ID المشترك أو Forward رسالة منه:")
         return
@@ -506,7 +506,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _clear_flow(context)
             _set_selected(context, channel_id, uid)
 
-            name = (sub.get("full_name") or "").strip()
+            name = (sub.get("name") or "").strip()
             name_txt = f"👤 الاسم: {name}\n" if name else ""
 
             await update.message.reply_text(
@@ -543,10 +543,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         ch_id = context.user_data["channel_id"]
         user_id = context.user_data["user_id"]
-        full_name = (context.user_data.get("full_name") or "").strip()
+        name = (context.user_data.get("name") or "").strip()
         expires_at = datetime.utcnow() + timedelta(days=days)
 
-        name_line = f"👤 الاسم: {full_name}\n" if full_name else ""
+        name_line = f"👤 الاسم: {name}\n" if name else ""
 
         await update.message.reply_text(
             "✅ تأكيد إضافة مشترك\n\n"
