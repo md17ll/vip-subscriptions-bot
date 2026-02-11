@@ -61,23 +61,23 @@ async def open_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     owner_id = q.from_user.id
     allowed, msg = require_owner_active(owner_id)
     if not allowed:
-        await q.message.reply_text(msg)
+        await q.edit_message_text(msg)
         return
 
     channels = _channels_of_owner(owner_id)
     if not channels:
-        await q.message.reply_text("⚠️ اربط قناة أولاً من زر (🔗 ربط قناة).")
+        await q.edit_message_text("⚠️ اربط قناة أولاً من زر (🔗 ربط قناة).")
         return
 
     # إن كان عنده قناة واحدة نختارها مباشرة
     if len(channels) == 1:
         _set_selected_channel(context, int(channels[0]["id"]))
         ch = channels[0]
-        await q.message.reply_text(_fmt_settings(ch), reply_markup=channel_settings_menu)
+        await q.edit_message_text(_fmt_settings(ch), reply_markup=channel_settings_menu)
         return
 
     context.user_data["flow"] = "settings_pick_channel"
-    await q.message.reply_text(
+    await q.edit_message_text(
         "📌 اختر القناة لفتح الإعدادات:",
         reply_markup=_kb_pick_channel(channels, "settings_ch", "back_main")
     )
@@ -90,16 +90,16 @@ async def pick_settings_channel(update: Update, context: ContextTypes.DEFAULT_TY
     owner_id = q.from_user.id
     allowed, msg = require_owner_active(owner_id)
     if not allowed:
-        await q.message.reply_text(msg)
+        await q.edit_message_text(msg)
         return
 
     _set_selected_channel(context, int(channel_id))
     ch = _channel_by_id(owner_id, int(channel_id))
     if not ch:
-        await q.message.reply_text("⚠️ القناة غير موجودة.")
+        await q.edit_message_text("⚠️ القناة غير موجودة.")
         return
 
-    await q.message.reply_text(_fmt_settings(ch), reply_markup=channel_settings_menu)
+    await q.edit_message_text(_fmt_settings(ch), reply_markup=channel_settings_menu)
 
 
 # =========================
@@ -113,17 +113,17 @@ async def toggle_notify(update: Update, context: ContextTypes.DEFAULT_TYPE):
     owner_id = q.from_user.id
     allowed, msg = require_owner_active(owner_id)
     if not allowed:
-        await q.message.reply_text(msg)
+        await q.edit_message_text(msg)
         return
 
     channel_id = _get_selected_channel(context)
     if not channel_id:
-        await q.message.reply_text("⚠️ اختر القناة أولاً من (⚙️ إعدادات القناة).")
+        await q.edit_message_text("⚠️ اختر القناة أولاً من (⚙️ إعدادات القناة).")
         return
 
     ch = _channel_by_id(owner_id, int(channel_id))
     if not ch:
-        await q.message.reply_text("⚠️ القناة غير موجودة.")
+        await q.edit_message_text("⚠️ القناة غير موجودة.")
         return
 
     new_val = not bool(ch["notify_enabled"])
@@ -137,7 +137,7 @@ async def toggle_notify(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     ch2 = _channel_by_id(owner_id, int(channel_id))
-    await q.message.reply_text(_fmt_settings(ch2), reply_markup=channel_settings_menu)
+    await q.edit_message_text(_fmt_settings(ch2), reply_markup=channel_settings_menu)
 
 
 async def toggle_autoremove(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -147,17 +147,17 @@ async def toggle_autoremove(update: Update, context: ContextTypes.DEFAULT_TYPE):
     owner_id = q.from_user.id
     allowed, msg = require_owner_active(owner_id)
     if not allowed:
-        await q.message.reply_text(msg)
+        await q.edit_message_text(msg)
         return
 
     channel_id = _get_selected_channel(context)
     if not channel_id:
-        await q.message.reply_text("⚠️ اختر القناة أولاً من (⚙️ إعدادات القناة).")
+        await q.edit_message_text("⚠️ اختر القناة أولاً من (⚙️ إعدادات القناة).")
         return
 
     ch = _channel_by_id(owner_id, int(channel_id))
     if not ch:
-        await q.message.reply_text("⚠️ القناة غير موجودة.")
+        await q.edit_message_text("⚠️ القناة غير موجودة.")
         return
 
     new_val = not bool(ch["auto_remove_enabled"])
@@ -171,7 +171,7 @@ async def toggle_autoremove(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     ch2 = _channel_by_id(owner_id, int(channel_id))
-    await q.message.reply_text(_fmt_settings(ch2), reply_markup=channel_settings_menu)
+    await q.edit_message_text(_fmt_settings(ch2), reply_markup=channel_settings_menu)
 
 
 # =========================
@@ -185,15 +185,15 @@ async def open_invite_duration(update: Update, context: ContextTypes.DEFAULT_TYP
     owner_id = q.from_user.id
     allowed, msg = require_owner_active(owner_id)
     if not allowed:
-        await q.message.reply_text(msg)
+        await q.edit_message_text(msg)
         return
 
     channel_id = _get_selected_channel(context)
     if not channel_id:
-        await q.message.reply_text("⚠️ اختر القناة أولاً من (⚙️ إعدادات القناة).")
+        await q.edit_message_text("⚠️ اختر القناة أولاً من (⚙️ إعدادات القناة).")
         return
 
-    await q.message.reply_text(
+    await q.edit_message_text(
         "⏱️ اختر مدة صلاحية رابط الدعوة:",
         reply_markup=invite_duration_menu
     )
@@ -205,16 +205,16 @@ async def set_invite_minutes(update: Update, context: ContextTypes.DEFAULT_TYPE,
     owner_id = q.from_user.id
     allowed, msg = require_owner_active(owner_id)
     if not allowed:
-        await q.message.reply_text(msg)
+        await q.edit_message_text(msg)
         return
 
     channel_id = _get_selected_channel(context)
     if not channel_id:
-        await q.message.reply_text("⚠️ اختر القناة أولاً من (⚙️ إعدادات القناة).")
+        await q.edit_message_text("⚠️ اختر القناة أولاً من (⚙️ إعدادات القناة).")
         return
 
     if minutes not in (5, 10, 30, 60):
-        await q.message.reply_text("⚠️ قيمة غير صحيحة.")
+        await q.edit_message_text("⚠️ قيمة غير صحيحة.")
         return
 
     db.execute(
@@ -227,8 +227,10 @@ async def set_invite_minutes(update: Update, context: ContextTypes.DEFAULT_TYPE,
     )
 
     ch2 = _channel_by_id(owner_id, int(channel_id))
-    await q.message.reply_text(f"✅ تم تحديث مدة الرابط إلى {minutes} دقيقة.\n\n" + _fmt_settings(ch2),
-                              reply_markup=channel_settings_menu)
+    await q.edit_message_text(
+        f"✅ تم تحديث مدة الرابط إلى {minutes} دقيقة.\n\n" + _fmt_settings(ch2),
+        reply_markup=channel_settings_menu
+    )
 
 
 # =========================
@@ -249,17 +251,17 @@ async def open_welcome_message(update: Update, context: ContextTypes.DEFAULT_TYP
     owner_id = q.from_user.id
     allowed, msg = require_owner_active(owner_id)
     if not allowed:
-        await q.message.reply_text(msg)
+        await q.edit_message_text(msg)
         return
 
     channel_id = _get_selected_channel(context)
     if not channel_id:
-        await q.message.reply_text("⚠️ اختر القناة أولاً.")
+        await q.edit_message_text("⚠️ اختر القناة أولاً.")
         return
 
     ch = _channel_by_id(owner_id, int(channel_id))
     if not ch:
-        await q.message.reply_text("⚠️ القناة غير موجودة.")
+        await q.edit_message_text("⚠️ القناة غير موجودة.")
         return
 
     current = (ch["welcome_message"] or "").strip()
@@ -268,7 +270,7 @@ async def open_welcome_message(update: Update, context: ContextTypes.DEFAULT_TYP
     else:
         txt = "📩 لا توجد رسالة دخول حالياً."
 
-    await q.message.reply_text(txt, reply_markup=_kb_welcome())
+    await q.edit_message_text(txt, reply_markup=_kb_welcome())
 
 async def set_welcome_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -277,16 +279,16 @@ async def set_welcome_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE)
     owner_id = q.from_user.id
     allowed, msg = require_owner_active(owner_id)
     if not allowed:
-        await q.message.reply_text(msg)
+        await q.edit_message_text(msg)
         return
 
     channel_id = _get_selected_channel(context)
     if not channel_id:
-        await q.message.reply_text("⚠️ اختر القناة أولاً.")
+        await q.edit_message_text("⚠️ اختر القناة أولاً.")
         return
 
     context.user_data["flow"] = "set_welcome"
-    await q.message.reply_text("✍️ أرسل الآن رسالة الدخول الجديدة:")
+    await q.edit_message_text("✍️ أرسل الآن رسالة الدخول الجديدة:")
 
 async def receive_welcome_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("flow") != "set_welcome":
@@ -329,12 +331,12 @@ async def clear_welcome_message(update: Update, context: ContextTypes.DEFAULT_TY
     owner_id = q.from_user.id
     allowed, msg = require_owner_active(owner_id)
     if not allowed:
-        await q.message.reply_text(msg)
+        await q.edit_message_text(msg)
         return
 
     channel_id = _get_selected_channel(context)
     if not channel_id:
-        await q.message.reply_text("⚠️ اختر القناة أولاً.")
+        await q.edit_message_text("⚠️ اختر القناة أولاً.")
         return
 
     db.execute(
@@ -346,4 +348,4 @@ async def clear_welcome_message(update: Update, context: ContextTypes.DEFAULT_TY
         (owner_id, int(channel_id), "clear_welcome_message", "")
     )
 
-    await q.message.reply_text("🗑️ تم حذف رسالة الدخول.")
+    await q.edit_message_text("🗑️ تم حذف رسالة الدخول.")
