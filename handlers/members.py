@@ -1,7 +1,5 @@
 from datetime import datetime, timedelta
-from telegram import (
-    Update, InlineKeyboardMarkup, InlineKeyboardButton
-)
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
 from database import db
@@ -40,6 +38,8 @@ def _get_selected(context: ContextTypes.DEFAULT_TYPE):
 
 def _parse_user_id_from_update(update: Update):
     msg = update.message
+    if not msg:
+        return None
     if msg.forward_from and msg.forward_from.id:
         return int(msg.forward_from.id)
     text = (msg.text or "").strip()
@@ -80,9 +80,137 @@ def _kb_member_actions(back_cb: str = "members_menu"):
         ],
         [InlineKeyboardButton("♻️ إعادة تفعيل 30 يوم", callback_data="reactivate")],
         [InlineKeyboardButton("🔗 رابط دخول", callback_data="invite_link")],
-        [InlineKeyboardButton("🚫 حذف/إزالة", callback_data="remove_member")],
+        [InlineKeyboardButton("🚫 حذف/إزالة", callback_data="remove_selected")],  # ✅ مهم
         [InlineKeyboardButton("🔙 رجوع", callback_data=back_cb)],
     ])
+
+
+# ========= MAIN MENU PAGES (الجدد) =========
+
+async def expiring_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+
+    owner_id = q.from_user.id
+    allowed, msg = require_owner_active(owner_id)
+    if not allowed:
+        await q.edit_message_text(msg)
+        return
+
+    channels = _channels_of_owner(owner_id)
+    if not channels:
+        await q.edit_message_text("⚠️ لم تربط أي قناة بعد. اربط قناة أولاً من (🔗 ربط قناة).", reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]
+        ]))
+        return
+
+    # نجلب أقرب 20 اشتراك ينتهي خلال 7 أيام
+    rows = db.fetch("""
+        SELECT s.user_id, s.expires_at, c.title, c.chat_id
+        FROM subscribers s
+        JOIN channels c ON c.id = s.channel_id
+        WHERE c.owner_id=%s
+          AND s.status='active'
+          AND s.expires_at <= NOW() + INTERVAL '7 days'
+        ORDER BY s.expires_at ASC
+        LIMIT 20
+    """, (owner_id,))
+
+    text = "⏳ القريبة من الانتهاء (خلال 7 أيام)\n\n"
+    if not rows:
+        text += "✅ لا يوجد اشتراكات قريبة من الانتهاء حالياً."
+    else:
+        for r in rows:
+            title = r["title"] or str(r["chat_id"])
+            exp = r["expires_at"]
+            exp_txt = exp.strftime("%Y-%m-%d %H:%M") if hasattr(exp, "strftime") else str(exp)
+            text += f"📌 {title}\n👤 {r['user_id']}\n📅 ينتهي: {exp_txt}\n\n"
+
+    await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]
+    ]))
+
+
+async def list_members(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+
+    owner_id = q.from_user.id
+    allowed, msg = require_owner_active(owner_id)
+    if not allowed:
+        await q.edit_message_text(msg)
+        return
+
+    channels = _channels_of_owner(owner_id)
+    if not channels:
+        await q.edit_message_text("⚠️ لم تربط أي قناة بعد. اربط قناة أولاً من (🔗 ربط قناة).", reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]
+        ]))
+        return
+
+    # آخر 30 مشترك (نشط) عبر كل قنوات المالك
+    rows = db.fetch("""
+        SELECT s.user_id, s.expires_at, s.status, c.title, c.chat_id
+        FROM subscribers s
+        JOIN channels c ON c.id = s.channel_id
+        WHERE c.owner_id=%s
+        ORDER BY s.updated_at DESC
+        LIMIT 30
+    """, (owner_id,))
+
+    text = "📋 قائمة المشتركين (آخر 30)\n\n"
+    if not rows:
+        text += "لا يوجد مشتركين حالياً."
+    else:
+        for r in rows:
+            title = r["title"] or str(r["chat_id"])
+            exp = r["expires_at"]
+            exp_txt = exp.strftime("%Y-%m-%d %H:%M") if hasattr(exp, "strftime") else str(exp)
+            text += f"📌 {title}\n👤 {r['user_id']}\n📊 {r['status']}\n📅 {exp_txt}\n\n"
+
+    await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]
+    ]))
+
+
+async def channel_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+
+    owner_id = q.from_user.id
+    allowed, msg = require_owner_active(owner_id)
+    if not allowed:
+        await q.edit_message_text(msg)
+        return
+
+    total_channels = db.fetch_one("SELECT COUNT(*) AS c FROM channels WHERE owner_id=%s", (owner_id,))["c"]
+    active = db.fetch_one("""
+        SELECT COUNT(*) AS c
+        FROM subscribers s JOIN channels c ON c.id=s.channel_id
+        WHERE c.owner_id=%s AND s.status='active'
+    """, (owner_id,))["c"]
+    expired = db.fetch_one("""
+        SELECT COUNT(*) AS c
+        FROM subscribers s JOIN channels c ON c.id=s.channel_id
+        WHERE c.owner_id=%s AND s.status='expired'
+    """, (owner_id,))["c"]
+    removed = db.fetch_one("""
+        SELECT COUNT(*) AS c
+        FROM subscribers s JOIN channels c ON c.id=s.channel_id
+        WHERE c.owner_id=%s AND s.status='removed'
+    """, (owner_id,))["c"]
+
+    text = (
+        "📊 إحصائيات القناة\n\n"
+        f"📌 عدد القنوات المرتبطة: {total_channels}\n"
+        f"🟢 نشط: {active}\n"
+        f"🔴 منتهي: {expired}\n"
+        f"🚫 مُزال: {removed}\n"
+    )
+
+    await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]
+    ]))
 
 
 # ========= Menus =========
@@ -93,11 +221,11 @@ async def members_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     allowed, msg = require_owner_active(q.from_user.id)
     if not allowed:
-        await q.message.reply_text(msg)
+        await q.edit_message_text(msg)
         return
 
     from ui import members_menu as kb
-    await q.message.reply_text("👤 إدارة المشتركين", reply_markup=kb)
+    await q.edit_message_text("👤 إدارة المشتركين", reply_markup=kb)
 
 
 # ========= Add Member =========
@@ -109,12 +237,12 @@ async def add_member_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     owner_id = q.from_user.id
     allowed, msg = require_owner_active(owner_id)
     if not allowed:
-        await q.message.reply_text(msg)
+        await q.edit_message_text(msg)
         return
 
     channels = _channels_of_owner(owner_id)
     if not channels:
-        await q.message.reply_text("⚠️ لم تربط أي قناة بعد. اربط قناة أولاً من (🔗 ربط قناة).")
+        await q.edit_message_text("⚠️ لم تربط أي قناة بعد. اربط قناة أولاً من (🔗 ربط قناة).")
         return
 
     context.user_data.clear()
@@ -123,10 +251,10 @@ async def add_member_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(channels) == 1:
         context.user_data["channel_id"] = int(channels[0]["id"])
         context.user_data["step"] = "wait_user"
-        await q.message.reply_text("👤 أرسل ID المشترك أو Forward رسالة منه:")
+        await q.edit_message_text("👤 أرسل ID المشترك أو Forward رسالة منه:")
         return
 
-    await q.message.reply_text(
+    await q.edit_message_text(
         "📌 اختر القناة لإضافة مشترك:",
         reply_markup=_kb_channels_pick(channels, "pick_ch_add", "members_menu")
     )
@@ -137,7 +265,7 @@ async def pick_channel_for_add(update: Update, context: ContextTypes.DEFAULT_TYP
     context.user_data["flow"] = "add_member"
     context.user_data["channel_id"] = int(channel_id)
     context.user_data["step"] = "wait_user"
-    await q.message.reply_text("👤 أرسل ID المشترك أو Forward رسالة منه:")
+    await q.edit_message_text("👤 أرسل ID المشترك أو Forward رسالة منه:")
 
 async def add_duration_pick(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -151,7 +279,7 @@ async def add_duration_pick(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if val == "custom":
         context.user_data["step"] = "wait_custom_days"
-        await q.message.reply_text("✍️ اكتب عدد الأيام الآن (مثال: 45):")
+        await q.edit_message_text("✍️ اكتب عدد الأيام الآن (مثال: 45):")
         return
 
     days = int(val)
@@ -162,7 +290,7 @@ async def add_duration_pick(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = context.user_data["user_id"]
     expires_at = datetime.utcnow() + timedelta(days=days)
 
-    await q.message.reply_text(
+    await q.edit_message_text(
         "✅ تأكيد إضافة مشترك\n\n"
         f"📌 Channel ID: {ch_id}\n"
         f"👤 User ID: {user_id}\n"
@@ -181,7 +309,7 @@ async def add_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     owner_id = q.from_user.id
     allowed, msg = require_owner_active(owner_id)
     if not allowed:
-        await q.message.reply_text(msg)
+        await q.edit_message_text(msg)
         return
 
     channel_id = int(context.user_data.get("channel_id"))
@@ -191,12 +319,11 @@ async def add_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ch = _channel_by_id(owner_id, channel_id)
     if not ch:
         context.user_data.clear()
-        await q.message.reply_text("⚠️ القناة غير موجودة أو ليست لك.")
+        await q.edit_message_text("⚠️ القناة غير موجودة أو ليست لك.")
         return
 
     expires_at = datetime.utcnow() + timedelta(days=days)
 
-    # upsert subscriber
     db.execute(
         """
         INSERT INTO subscribers(channel_id, user_id, status, expires_at, created_at, updated_at)
@@ -212,7 +339,6 @@ async def add_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         (owner_id, channel_id, user_id, "member_added", f"{days} days")
     )
 
-    # create invite link with channel invite_minutes
     invite_minutes = int(ch["invite_minutes"] or 10)
     invite_url = None
     try:
@@ -228,23 +354,21 @@ async def add_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
             (owner_id, channel_id, user_id, "invite_failed", str(e))
         )
 
-    # set selection for quick actions
     _set_selected(context, channel_id, user_id)
-
     context.user_data.clear()
 
     if invite_url:
-        await q.message.reply_text(
+        await q.edit_message_text(
             "✅ تم حفظ الاشتراك وإنشاء رابط دخول.\n\n"
             f"⏳ صلاحية الرابط: {invite_minutes} دقيقة\n"
             "🔒 استخدام: مرة واحدة\n\n"
             f"🔗 {invite_url}",
-            reply_markup=_kb_member_actions()
+            reply_markup=_kb_member_actions("back_main")
         )
     else:
-        await q.message.reply_text(
+        await q.edit_message_text(
             "✅ تم حفظ الاشتراك.\n⚠️ فشل إنشاء الرابط (تأكد صلاحيات Invite للبوت).",
-            reply_markup=_kb_member_actions()
+            reply_markup=_kb_member_actions("back_main")
         )
 
 
@@ -257,12 +381,12 @@ async def search_member_start(update: Update, context: ContextTypes.DEFAULT_TYPE
     owner_id = q.from_user.id
     allowed, msg = require_owner_active(owner_id)
     if not allowed:
-        await q.message.reply_text(msg)
+        await q.edit_message_text(msg)
         return
 
     channels = _channels_of_owner(owner_id)
     if not channels:
-        await q.message.reply_text("⚠️ اربط قناة أولاً.")
+        await q.edit_message_text("⚠️ اربط قناة أولاً.")
         return
 
     context.user_data.clear()
@@ -271,10 +395,10 @@ async def search_member_start(update: Update, context: ContextTypes.DEFAULT_TYPE
     if len(channels) == 1:
         context.user_data["channel_id"] = int(channels[0]["id"])
         context.user_data["step"] = "wait_user"
-        await q.message.reply_text("🔍 أرسل ID المشترك أو Forward رسالة منه للبحث:")
+        await q.edit_message_text("🔍 أرسل ID المشترك أو Forward رسالة منه للبحث:")
         return
 
-    await q.message.reply_text(
+    await q.edit_message_text(
         "📌 اختر القناة للبحث:",
         reply_markup=_kb_channels_pick(channels, "pick_ch_search", "members_menu")
     )
@@ -285,7 +409,7 @@ async def pick_channel_for_search(update: Update, context: ContextTypes.DEFAULT_
     context.user_data["flow"] = "search_member"
     context.user_data["channel_id"] = int(channel_id)
     context.user_data["step"] = "wait_user"
-    await q.message.reply_text("🔍 أرسل ID المشترك أو Forward رسالة منه للبحث:")
+    await q.edit_message_text("🔍 أرسل ID المشترك أو Forward رسالة منه للبحث:")
 
 async def remove_member_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -294,12 +418,12 @@ async def remove_member_start(update: Update, context: ContextTypes.DEFAULT_TYPE
     owner_id = q.from_user.id
     allowed, msg = require_owner_active(owner_id)
     if not allowed:
-        await q.message.reply_text(msg)
+        await q.edit_message_text(msg)
         return
 
     channels = _channels_of_owner(owner_id)
     if not channels:
-        await q.message.reply_text("⚠️ اربط قناة أولاً.")
+        await q.edit_message_text("⚠️ اربط قناة أولاً.")
         return
 
     context.user_data.clear()
@@ -308,10 +432,10 @@ async def remove_member_start(update: Update, context: ContextTypes.DEFAULT_TYPE
     if len(channels) == 1:
         context.user_data["channel_id"] = int(channels[0]["id"])
         context.user_data["step"] = "wait_user"
-        await q.message.reply_text("🚫 أرسل ID المشترك أو Forward رسالة منه للحذف:")
+        await q.edit_message_text("🚫 أرسل ID المشترك أو Forward رسالة منه للحذف:")
         return
 
-    await q.message.reply_text(
+    await q.edit_message_text(
         "📌 اختر القناة للحذف:",
         reply_markup=_kb_channels_pick(channels, "pick_ch_remove", "members_menu")
     )
@@ -322,10 +446,11 @@ async def pick_channel_for_remove(update: Update, context: ContextTypes.DEFAULT_
     context.user_data["flow"] = "remove_member"
     context.user_data["channel_id"] = int(channel_id)
     context.user_data["step"] = "wait_user"
-    await q.message.reply_text("🚫 أرسل ID المشترك أو Forward رسالة منه للحذف:")
+    await q.edit_message_text("🚫 أرسل ID المشترك أو Forward رسالة منه للحذف:")
 
 
 # ========= Text Receiver for flows =========
+# (يبقى reply_text طبيعي لأنه رسالة من المستخدم)
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     flow = context.user_data.get("flow")
@@ -347,7 +472,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⏳ اختر مدة الاشتراك:", reply_markup=_kb_duration("members_menu"))
             return
 
-        # search or remove: show file or execute remove
         channel_id = int(context.user_data["channel_id"])
         sub = _sub_by_user(channel_id, uid)
 
@@ -364,17 +488,16 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🆔 {uid}\n"
                 f"📅 ينتهي: {sub['expires_at']}\n"
                 f"📊 الحالة: {sub['status']}",
-                reply_markup=_kb_member_actions()
+                reply_markup=_kb_member_actions("back_main")
             )
             return
 
         if flow == "remove_member":
-            # store selection and run remove via existing callback flow
             _set_selected(context, channel_id, uid)
             context.user_data.clear()
             await update.message.reply_text(
                 "✅ تم تحديد المشترك. اضغط زر (🚫 حذف/إزالة) للتأكيد.",
-                reply_markup=_kb_member_actions()
+                reply_markup=_kb_member_actions("back_main")
             )
             return
 
@@ -414,21 +537,20 @@ async def extend_selected(update: Update, context: ContextTypes.DEFAULT_TYPE, da
     owner_id = q.from_user.id
     allowed, msg = require_owner_active(owner_id)
     if not allowed:
-        await q.message.reply_text(msg)
+        await q.edit_message_text(msg)
         return
 
     channel_id, user_id = _get_selected(context)
     if not channel_id or not user_id:
-        await q.message.reply_text("⚠️ ابحث عن المشترك أولاً.")
+        await q.edit_message_text("⚠️ ابحث عن المشترك أولاً.")
         return
 
     sub = _sub_by_user(channel_id, user_id)
     if not sub:
-        await q.message.reply_text("❌ المشترك غير موجود.")
+        await q.edit_message_text("❌ المشترك غير موجود.")
         return
 
     base = sub["expires_at"]
-    # base قد تكون datetime من psycopg2
     if base < datetime.utcnow():
         base = datetime.utcnow()
 
@@ -443,7 +565,7 @@ async def extend_selected(update: Update, context: ContextTypes.DEFAULT_TYPE, da
         (owner_id, channel_id, user_id, "extended", f"{days} days")
     )
 
-    await q.message.reply_text(f"✅ تم التمديد. الانتهاء الجديد: {new_exp}", reply_markup=_kb_member_actions())
+    await q.edit_message_text(f"✅ تم التمديد. الانتهاء الجديد: {new_exp}", reply_markup=_kb_member_actions("back_main"))
 
 async def reactivate_selected(update: Update, context: ContextTypes.DEFAULT_TYPE, days: int = 30):
     q = update.callback_query
@@ -452,12 +574,12 @@ async def reactivate_selected(update: Update, context: ContextTypes.DEFAULT_TYPE
     owner_id = q.from_user.id
     allowed, msg = require_owner_active(owner_id)
     if not allowed:
-        await q.message.reply_text(msg)
+        await q.edit_message_text(msg)
         return
 
     channel_id, user_id = _get_selected(context)
     if not channel_id or not user_id:
-        await q.message.reply_text("⚠️ ابحث عن المشترك أولاً.")
+        await q.edit_message_text("⚠️ ابحث عن المشترك أولاً.")
         return
 
     new_exp = datetime.utcnow() + timedelta(days=days)
@@ -471,7 +593,7 @@ async def reactivate_selected(update: Update, context: ContextTypes.DEFAULT_TYPE
         (owner_id, channel_id, user_id, "reactivated", f"{days} days")
     )
 
-    await q.message.reply_text(f"♻️ تم إعادة التفعيل. الانتهاء: {new_exp}", reply_markup=_kb_member_actions())
+    await q.edit_message_text(f"♻️ تم إعادة التفعيل. الانتهاء: {new_exp}", reply_markup=_kb_member_actions("back_main"))
 
 async def invite_link_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -480,17 +602,17 @@ async def invite_link_selected(update: Update, context: ContextTypes.DEFAULT_TYP
     owner_id = q.from_user.id
     allowed, msg = require_owner_active(owner_id)
     if not allowed:
-        await q.message.reply_text(msg)
+        await q.edit_message_text(msg)
         return
 
     channel_id, user_id = _get_selected(context)
     if not channel_id or not user_id:
-        await q.message.reply_text("⚠️ ابحث عن المشترك أولاً.")
+        await q.edit_message_text("⚠️ ابحث عن المشترك أولاً.")
         return
 
     ch = _channel_by_id(owner_id, channel_id)
     if not ch:
-        await q.message.reply_text("⚠️ القناة غير موجودة.")
+        await q.edit_message_text("⚠️ القناة غير موجودة.")
         return
 
     invite_minutes = int(ch["invite_minutes"] or 10)
@@ -505,16 +627,16 @@ async def invite_link_selected(update: Update, context: ContextTypes.DEFAULT_TYP
             "INSERT INTO logs(owner_id, channel_id, user_id, action, details) VALUES(%s,%s,%s,%s,%s)",
             (owner_id, channel_id, user_id, "invite_created", f"{invite_minutes} minutes")
         )
-        await q.message.reply_text(
+        await q.edit_message_text(
             f"🔗 رابط دخول مؤقت ({invite_minutes} دقيقة / مرة واحدة):\n\n{link.invite_link}",
-            reply_markup=_kb_member_actions()
+            reply_markup=_kb_member_actions("back_main")
         )
     except Exception as e:
         db.execute(
             "INSERT INTO logs(owner_id, channel_id, user_id, action, details) VALUES(%s,%s,%s,%s,%s)",
             (owner_id, channel_id, user_id, "invite_failed", str(e))
         )
-        await q.message.reply_text("⚠️ فشل إنشاء الرابط. تأكد صلاحية Invite للبوت.", reply_markup=_kb_member_actions())
+        await q.edit_message_text("⚠️ فشل إنشاء الرابط. تأكد صلاحية Invite للبوت.", reply_markup=_kb_member_actions("back_main"))
 
 async def remove_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -523,21 +645,19 @@ async def remove_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     owner_id = q.from_user.id
     allowed, msg = require_owner_active(owner_id)
     if not allowed:
-        await q.message.reply_text(msg)
+        await q.edit_message_text(msg)
         return
 
     channel_id, user_id = _get_selected(context)
     if not channel_id or not user_id:
-        await q.message.reply_text("⚠️ ابحث عن المشترك أولاً.")
+        await q.edit_message_text("⚠️ ابحث عن المشترك أولاً.")
         return
 
-    # get chat_id
     ch = _channel_by_id(owner_id, channel_id)
     if not ch:
-        await q.message.reply_text("⚠️ القناة غير موجودة.")
+        await q.edit_message_text("⚠️ القناة غير موجودة.")
         return
 
-    # remove from channel
     try:
         await context.bot.ban_chat_member(int(ch["chat_id"]), int(user_id))
         await context.bot.unban_chat_member(int(ch["chat_id"]), int(user_id))
@@ -556,4 +676,4 @@ async def remove_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
         (owner_id, channel_id, user_id, "removed", "")
     )
 
-    await q.message.reply_text("🚫 تم إزالة المشترك وتحديث حالته.", reply_markup=_kb_member_actions())
+    await q.edit_message_text("🚫 تم إزالة المشترك وتحديث حالته.", reply_markup=_kb_member_actions("back_main"))
