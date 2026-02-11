@@ -55,6 +55,12 @@ class DB:
         );
         """)
 
+        # ✅ جديد (بدون تخريب): إذا كان الجدول قديم وما فيه name نضيفه
+        cur.execute("""
+        ALTER TABLE subscribers
+        ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '';
+        """)
+
         # 4) Logs (سجل العمليات التفصيلي)
         cur.execute("""
         CREATE TABLE IF NOT EXISTS logs (
