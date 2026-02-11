@@ -36,6 +36,11 @@ def _get_selected(context: ContextTypes.DEFAULT_TYPE):
     uid = context.user_data.get("selected_user_id")
     return ch, uid
 
+# ✅ جديد: نمسح فقط بيانات التدفق بدون لمس selected
+def _clear_flow(context: ContextTypes.DEFAULT_TYPE):
+    for k in ("flow", "step", "channel_id", "user_id", "days"):
+        context.user_data.pop(k, None)
+
 def _parse_user_id_from_update(update: Update):
     msg = update.message
     if not msg:
@@ -104,7 +109,6 @@ async def expiring_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]))
         return
 
-    # نجلب أقرب 20 اشتراك ينتهي خلال 7 أيام
     rows = db.fetch("""
         SELECT s.user_id, s.expires_at, c.title, c.chat_id
         FROM subscribers s
@@ -148,7 +152,6 @@ async def list_members(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]))
         return
 
-    # آخر 30 مشترك (نشط) عبر كل قنوات المالك
     rows = db.fetch("""
         SELECT s.user_id, s.expires_at, s.status, c.title, c.chat_id
         FROM subscribers s
@@ -245,7 +248,8 @@ async def add_member_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text("⚠️ لم تربط أي قناة بعد. اربط قناة أولاً من (🔗 ربط قناة).")
         return
 
-    context.user_data.clear()
+    # ✅ بدل clear الكامل
+    _clear_flow(context)
     context.user_data["flow"] = "add_member"
 
     if len(channels) == 1:
@@ -274,7 +278,7 @@ async def add_duration_pick(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("flow") != "add_member":
         return
 
-    data = q.data  # add_dur:7 / add_dur:custom
+    data = q.data
     _, val = data.split(":", 1)
 
     if val == "custom":
@@ -318,7 +322,7 @@ async def add_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     ch = _channel_by_id(owner_id, channel_id)
     if not ch:
-        context.user_data.clear()
+        _clear_flow(context)
         await q.edit_message_text("⚠️ القناة غير موجودة أو ليست لك.")
         return
 
@@ -354,8 +358,9 @@ async def add_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
             (owner_id, channel_id, user_id, "invite_failed", str(e))
         )
 
+    # ✅ لا نمسح selected
+    _clear_flow(context)
     _set_selected(context, channel_id, user_id)
-    context.user_data.clear()
 
     if invite_url:
         await q.edit_message_text(
@@ -389,7 +394,8 @@ async def search_member_start(update: Update, context: ContextTypes.DEFAULT_TYPE
         await q.edit_message_text("⚠️ اربط قناة أولاً.")
         return
 
-    context.user_data.clear()
+    # ✅ بدل clear الكامل
+    _clear_flow(context)
     context.user_data["flow"] = "search_member"
 
     if len(channels) == 1:
@@ -426,7 +432,8 @@ async def remove_member_start(update: Update, context: ContextTypes.DEFAULT_TYPE
         await q.edit_message_text("⚠️ اربط قناة أولاً.")
         return
 
-    context.user_data.clear()
+    # ✅ بدل clear الكامل
+    _clear_flow(context)
     context.user_data["flow"] = "remove_member"
 
     if len(channels) == 1:
@@ -450,7 +457,6 @@ async def pick_channel_for_remove(update: Update, context: ContextTypes.DEFAULT_
 
 
 # ========= Text Receiver for flows =========
-# (يبقى reply_text طبيعي لأنه رسالة من المستخدم)
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     flow = context.user_data.get("flow")
@@ -477,12 +483,12 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if not sub:
             await update.message.reply_text("❌ هذا المستخدم غير موجود ضمن هذه القناة.")
-            context.user_data.clear()
+            _clear_flow(context)
             return
 
         if flow == "search_member":
+            _clear_flow(context)
             _set_selected(context, channel_id, uid)
-            context.user_data.clear()
             await update.message.reply_text(
                 "👤 ملف المشترك\n\n"
                 f"🆔 {uid}\n"
@@ -493,8 +499,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if flow == "remove_member":
+            _clear_flow(context)
             _set_selected(context, channel_id, uid)
-            context.user_data.clear()
             await update.message.reply_text(
                 "✅ تم تحديد المشترك. اضغط زر (🚫 حذف/إزالة) للتأكيد.",
                 reply_markup=_kb_member_actions("back_main")
@@ -667,13 +673,18 @@ async def remove_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
             (owner_id, channel_id, user_id, "remove_failed", str(e))
         )
 
+    # ✅ التعديل المطلوب: حذف نهائي بدل status removed
     db.execute(
-        "UPDATE subscribers SET status='removed', updated_at=CURRENT_TIMESTAMP WHERE channel_id=%s AND user_id=%s",
+        "DELETE FROM subscribers WHERE channel_id=%s AND user_id=%s",
         (channel_id, user_id)
     )
+
     db.execute(
         "INSERT INTO logs(owner_id, channel_id, user_id, action, details) VALUES(%s,%s,%s,%s,%s)",
-        (owner_id, channel_id, user_id, "removed", "")
+        (owner_id, channel_id, user_id, "removed_permanently", "")
     )
 
-    await q.edit_message_text("🚫 تم إزالة المشترك وتحديث حالته.", reply_markup=_kb_member_actions("back_main"))
+    await q.edit_message_text(
+        "🚫 تم طرد المشترك من القناة وحذفه نهائياً من النظام.",
+        reply_markup=_kb_member_actions("back_main")
+    )
