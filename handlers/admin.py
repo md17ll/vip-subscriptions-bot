@@ -38,10 +38,10 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
 
     if not is_superadmin(q.from_user.id):
-        await q.message.reply_text("⛔ غير مسموح.")
+        await q.edit_message_text("⛔ غير مسموح.")
         return
 
-    await q.message.reply_text("🛠️ لوحة تحكم الأدمن", reply_markup=admin_panel_menu)
+    await q.edit_message_text("🛠️ لوحة تحكم الأدمن", reply_markup=admin_panel_menu)
 
 
 async def manage_owners(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -49,10 +49,10 @@ async def manage_owners(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
 
     if not is_superadmin(q.from_user.id):
-        await q.message.reply_text("⛔ غير مسموح.")
+        await q.edit_message_text("⛔ غير مسموح.")
         return
 
-    await q.message.reply_text("🏷️ إدارة أصحاب القنوات", reply_markup=manage_owners_menu)
+    await q.edit_message_text("🏷️ إدارة أصحاب القنوات", reply_markup=manage_owners_menu)
 
 
 # =========================
@@ -64,14 +64,14 @@ async def add_owner_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
 
     if not is_superadmin(q.from_user.id):
-        await q.message.reply_text("⛔ غير مسموح.")
+        await q.edit_message_text("⛔ غير مسموح.")
         return
 
     context.user_data.clear()
     context.user_data["flow"] = "add_owner"
     context.user_data["step"] = "wait_owner_id"
 
-    await q.message.reply_text("➕ أرسل الآن ID صاحب القناة (رقم فقط):", reply_markup=_kb_back_admin())
+    await q.edit_message_text("➕ أرسل الآن ID صاحب القناة (رقم فقط):", reply_markup=_kb_back_admin())
 
 
 # =========================
@@ -83,14 +83,14 @@ async def extend_owner_start(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await q.answer()
 
     if not is_superadmin(q.from_user.id):
-        await q.message.reply_text("⛔ غير مسموح.")
+        await q.edit_message_text("⛔ غير مسموح.")
         return
 
     context.user_data.clear()
     context.user_data["flow"] = "extend_owner"
     context.user_data["step"] = "wait_owner_id"
 
-    await q.message.reply_text("♻️ أرسل ID الـ Owner لتمديد اشتراكه:", reply_markup=_kb_back_admin())
+    await q.edit_message_text("♻️ أرسل ID الـ Owner لتمديد اشتراكه:", reply_markup=_kb_back_admin())
 
 
 async def disable_owner_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -98,14 +98,14 @@ async def disable_owner_start(update: Update, context: ContextTypes.DEFAULT_TYPE
     await q.answer()
 
     if not is_superadmin(q.from_user.id):
-        await q.message.reply_text("⛔ غير مسموح.")
+        await q.edit_message_text("⛔ غير مسموح.")
         return
 
     context.user_data.clear()
     context.user_data["flow"] = "disable_owner"
     context.user_data["step"] = "wait_owner_id"
 
-    await q.message.reply_text("⛔ أرسل ID الـ Owner لإيقافه:", reply_markup=_kb_back_admin())
+    await q.edit_message_text("⛔ أرسل ID الـ Owner لإيقافه:", reply_markup=_kb_back_admin())
 
 
 async def search_owner_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -113,14 +113,14 @@ async def search_owner_start(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await q.answer()
 
     if not is_superadmin(q.from_user.id):
-        await q.message.reply_text("⛔ غير مسموح.")
+        await q.edit_message_text("⛔ غير مسموح.")
         return
 
     context.user_data.clear()
     context.user_data["flow"] = "search_owner"
     context.user_data["step"] = "wait_owner_id"
 
-    await q.message.reply_text("🔍 أرسل ID الـ Owner للبحث:", reply_markup=_kb_back_admin())
+    await q.edit_message_text("🔍 أرسل ID الـ Owner للبحث:", reply_markup=_kb_back_admin())
 
 
 async def owners_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -128,7 +128,7 @@ async def owners_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
 
     if not is_superadmin(q.from_user.id):
-        await q.message.reply_text("⛔ غير مسموح.")
+        await q.edit_message_text("⛔ غير مسموح.")
         return
 
     rows = db.fetch("""
@@ -139,7 +139,7 @@ async def owners_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """)
 
     if not rows:
-        await q.message.reply_text("لا يوجد Owners حالياً.", reply_markup=_kb_back_admin())
+        await q.edit_message_text("لا يوجد Owners حالياً.", reply_markup=_kb_back_admin())
         return
 
     txt = "📋 قائمة آخر 20 Owner:\n\n"
@@ -149,7 +149,7 @@ async def owners_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         status = "✅" if r["active"] else "⛔"
         txt += f"{status} `{r['owner_id']}` — {exp_txt}\n"
 
-    await q.message.reply_text(txt, reply_markup=_kb_back_admin(), parse_mode="Markdown")
+    await q.edit_message_text(txt, reply_markup=_kb_back_admin(), parse_mode="Markdown")
 
 
 async def system_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -157,7 +157,7 @@ async def system_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
 
     if not is_superadmin(q.from_user.id):
-        await q.message.reply_text("⛔ غير مسموح.")
+        await q.edit_message_text("⛔ غير مسموح.")
         return
 
     owners_total = db.fetch_one("SELECT COUNT(*) AS c FROM owners")["c"]
@@ -174,7 +174,7 @@ async def system_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🔴 Subscribers Expired: {subs_expired}\n"
     )
 
-    await q.message.reply_text(txt, reply_markup=_kb_back_admin())
+    await q.edit_message_text(txt, reply_markup=_kb_back_admin())
 
 
 # =========================
@@ -186,14 +186,14 @@ async def broadcast_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
 
     if not is_superadmin(q.from_user.id):
-        await q.message.reply_text("⛔ غير مسموح.")
+        await q.edit_message_text("⛔ غير مسموح.")
         return
 
     context.user_data.clear()
     context.user_data["flow"] = "broadcast"
     context.user_data["step"] = "wait_text"
 
-    await q.message.reply_text(
+    await q.edit_message_text(
         "📨 أرسل نص الرسالة الآن لإرسالها لكل الـ Owners (سيتم الإرسال للأشخاص المسجلين في owners):",
         reply_markup=_kb_back_admin()
     )
@@ -208,12 +208,12 @@ async def owner_action_callback(update: Update, context: ContextTypes.DEFAULT_TY
     await q.answer()
 
     if not is_superadmin(q.from_user.id):
-        await q.message.reply_text("⛔ غير مسموح.")
+        await q.edit_message_text("⛔ غير مسموح.")
         return
 
     row = db.fetch_one("SELECT owner_id, active, sub_expires_at, note FROM owners WHERE owner_id=%s", (owner_id,))
     if not row:
-        await q.message.reply_text("❌ Owner غير موجود.")
+        await q.edit_message_text("❌ Owner غير موجود.")
         return
 
     if action == "extend30":
@@ -246,11 +246,11 @@ async def owner_action_callback(update: Update, context: ContextTypes.DEFAULT_TY
         context.user_data.clear()
         context.user_data["flow"] = "owner_note"
         context.user_data["owner_id"] = owner_id
-        await q.message.reply_text("📝 أرسل الملاحظة الجديدة الآن:")
+        await q.edit_message_text("📝 أرسل الملاحظة الجديدة الآن:")
         return
 
     row2 = db.fetch_one("SELECT owner_id, active, sub_expires_at, note FROM owners WHERE owner_id=%s", (owner_id,))
-    await q.message.reply_text(_fmt_owner_row(row2), reply_markup=_kb_owner_actions(owner_id), parse_mode="Markdown")
+    await q.edit_message_text(_fmt_owner_row(row2), reply_markup=_kb_owner_actions(owner_id), parse_mode="Markdown")
 
 
 # =========================
