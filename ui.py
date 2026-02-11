@@ -22,6 +22,12 @@ def owner_main_menu(is_admin=False):
     return InlineKeyboardMarkup(rows)
 
 
+# زر رجوع عام للمنيو الرئيسية
+back_main_kb = InlineKeyboardMarkup([
+    [InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]
+])
+
+
 # =========================
 # ADMIN PANEL
 # =========================
@@ -61,8 +67,25 @@ member_actions_menu = InlineKeyboardMarkup([
     [InlineKeyboardButton("🔄 تمديد 30 يوم", callback_data="extend_30")],
     [InlineKeyboardButton("♻️ إعادة تفعيل", callback_data="reactivate")],
     [InlineKeyboardButton("🔗 رابط دخول", callback_data="invite_link")],
-    [InlineKeyboardButton("🚫 حذف", callback_data="remove_member")],
+    [InlineKeyboardButton("🚫 حذف", callback_data="remove_selected")],  # ✅ إصلاح التعارض
     [InlineKeyboardButton("🔙 رجوع", callback_data="members_menu")]
+])
+
+
+# =========================
+# LISTS / STATS / EXPIRING
+# =========================
+
+expiring_menu_kb = InlineKeyboardMarkup([
+    [InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]
+])
+
+list_members_kb = InlineKeyboardMarkup([
+    [InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]
+])
+
+channel_stats_kb = InlineKeyboardMarkup([
+    [InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]
 ])
 
 
